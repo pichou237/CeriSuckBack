@@ -25,7 +25,12 @@ WORKDIR /var/www
 COPY . .
 
 # Étape 6 : Installation des dépendances Laravel
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader
+RUN composer install --optimize-autoloader
+
+
+# Générer la clé d'application Laravel
+RUN php artisan key:generate
+
 
 # Étape 7 : Droits sur les dossiers nécessaires
 RUN chown -R www-data:www-data \
