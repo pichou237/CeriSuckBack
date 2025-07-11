@@ -43,4 +43,4 @@ RUN chown -R www-data:www-data \
 # Étape 8 : Exposition du port FPM
 EXPOSE 8080
 # Étape 9 : Commande de démarrage
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8080"]
+CMD ["php", "artisan", "serve"]
