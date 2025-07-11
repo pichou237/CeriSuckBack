@@ -27,6 +27,9 @@ COPY . .
 # Étape 6 : Installation des dépendances Laravel
 RUN composer install --optimize-autoloader
 
+# Copier .env.example vers .env
+RUN cp .env.example .env
+
 
 # Générer la clé d'application Laravel
 RUN php artisan key:generate
