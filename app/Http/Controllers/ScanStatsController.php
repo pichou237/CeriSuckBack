@@ -1,6 +1,7 @@
 <?php
 
-namespace App\Http\Controllers;
+/*
+ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Scan;
@@ -64,7 +65,7 @@ class ScanStatsController extends Controller
         $daysInMonth = $startDate->daysInMonth;
 
         $stats = Scan::select(
-                DB::raw('DAY(scanned_at) as day'),
+                DB::raw('EXTRACT(DAY(scanned_at)) as day'),
                 DB::raw('SUM(CASE WHEN status = "valide" THEN 1 ELSE 0 END) as successful'),
                 DB::raw('SUM(CASE WHEN status = "invalide" THEN 1 ELSE 0 END) as failed')
             )
@@ -101,9 +102,145 @@ class ScanStatsController extends Controller
         $endDate = Carbon::now()->endOfYear();
 
         $stats = Scan::select(
-                DB::raw('MONTH(scanned_at) as month'),
+                DB::raw('EXTRACT(MONTH(scanned_at)) as month'),
                 DB::raw('SUM(CASE WHEN status = "valide" THEN 1 ELSE 0 END) as successful'),
                 DB::raw('SUM(CASE WHEN status = "invalide" THEN 1 ELSE 0 END) as failed')
+            )
+            ->whereBetween('scanned_at', [$startDate, $endDate])
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+
+        $monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+        $successfulScans = array_fill(1, 12, 0);
+        $failedScans = array_fill(1, 12, 0);
+
+        foreach ($stats as $stat) {
+            $successfulScans[$stat->month] = $stat->successful;
+            $failedScans[$stat->month] = $stat->failed;
+        }
+
+        return [
+            'labels' => $monthNames,
+            'successfulScans' => array_values($successfulScans),
+            'failedScans' => array_values($failedScans)
+        ];
+    }
+}
+    **/
+
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Models\Scan;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+
+class ScanStatsController extends Controller
+{
+    public function getScanStats(Request $request)
+    {
+        $request->validate([
+            'range' => 'sometimes|in:week,month,year'
+        ]);
+
+        $range = $request->input('range', 'week');
+
+        if ($range === 'week') {
+            return response()->json($this->getWeeklyStats());
+        } elseif ($range === 'month') {
+            return response()->json($this->getMonthlyStats());
+        } elseif ($range === 'year') {
+            return response()->json($this->getYearlyStats());
+        }
+
+        return response()->json(['error' => 'Invalid range parameter'], 400);
+    }
+
+    protected function getWeeklyStats()
+    {
+        $startDate = Carbon::now()->startOfWeek();
+        $endDate = Carbon::now()->endOfWeek();
+
+        $stats = Scan::select(
+                DB::raw('EXTRACT(DOW FROM scanned_at) as day_of_week'),
+                DB::raw('SUM(CASE WHEN status = \'valide\' THEN 1 ELSE 0 END) as successful'),
+                DB::raw('SUM(CASE WHEN status = \'invalide\' THEN 1 ELSE 0 END) as failed')
+            )
+            ->whereBetween('scanned_at', [$startDate, $endDate])
+            ->groupBy('day_of_week')
+            ->orderBy('day_of_week')
+            ->get();
+
+        $daysOfWeek = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+        $successfulScans = array_fill(0, 7, 0);
+        $failedScans = array_fill(0, 7, 0);
+
+        foreach ($stats as $stat) {
+            $successfulScans[$stat->day_of_week] = $stat->successful;
+            $failedScans[$stat->day_of_week] = $stat->failed;
+        }
+
+        // Réorganiser pour commencer par Lundi
+        $sunday = array_shift($daysOfWeek);
+        $daysOfWeek[] = $sunday;
+        $sundaySuccess = array_shift($successfulScans);
+        $successfulScans[] = $sundaySuccess;
+        $sundayFailed = array_shift($failedScans);
+        $failedScans[] = $sundayFailed;
+
+        return [
+            'labels' => $daysOfWeek,
+            'successfulScans' => $successfulScans,
+            'failedScans' => $failedScans
+        ];
+    }
+
+    protected function getMonthlyStats()
+    {
+        $startDate = Carbon::now()->startOfMonth();
+        $endDate = Carbon::now()->endOfMonth();
+        $daysInMonth = $startDate->daysInMonth;
+
+        $stats = Scan::select(
+                DB::raw('EXTRACT(DAY FROM scanned_at) as day'),
+                DB::raw('SUM(CASE WHEN status = \'valide\' THEN 1 ELSE 0 END) as successful'),
+                DB::raw('SUM(CASE WHEN status = \'invalide\' THEN 1 ELSE 0 END) as failed')
+            )
+            ->whereBetween('scanned_at', [$startDate, $endDate])
+            ->groupBy('day')
+            ->orderBy('day')
+            ->get();
+
+        $successfulScans = array_fill(1, $daysInMonth, 0);
+        $failedScans = array_fill(1, $daysInMonth, 0);
+
+        foreach ($stats as $stat) {
+            $successfulScans[$stat->day] = $stat->successful;
+            $failedScans[$stat->day] = $stat->failed;
+        }
+
+        $labels = range(1, $daysInMonth);
+        $successfulScans = array_values($successfulScans);
+        $failedScans = array_values($failedScans);
+
+        return [
+            'labels' => $labels,
+            'successfulScans' => $successfulScans,
+            'failedScans' => $failedScans
+        ];
+    }
+
+    protected function getYearlyStats()
+    {
+        $startDate = Carbon::now()->startOfYear();
+        $endDate = Carbon::now()->endOfYear();
+
+        $stats = Scan::select(
+                DB::raw('EXTRACT(MONTH FROM scanned_at) as month'),
+                DB::raw('SUM(CASE WHEN status = \'valide\' THEN 1 ELSE 0 END) as successful'),
+                DB::raw('SUM(CASE WHEN status = \'invalide\' THEN 1 ELSE 0 END) as failed')
             )
             ->whereBetween('scanned_at', [$startDate, $endDate])
             ->groupBy('month')
